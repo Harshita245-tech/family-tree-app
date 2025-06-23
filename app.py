@@ -1,91 +1,103 @@
+# app.py  ── streamlined, arrow-labelled, vertical-only family tree
 import streamlit as st
 from graphviz import Digraph
 import uuid
 
-st.set_page_config(page_title="Family Tree", layout="wide")
-st.title("🔗 Clean Family Tree (with arrows labeled)")
+st.set_page_config(page_title="Vertical Family Tree", layout="wide")
+st.title("🌳  Vertical Family Tree Builder")
 
+# ────────────────────────────────────────────────────────────────────────
+# Session-state helpers
+# ────────────────────────────────────────────────────────────────────────
 if "members" not in st.session_state:
-    st.session_state.members = []  # {id, name, spouse_id, parent_ids, relation_label_to_parents}
+    st.session_state.members = []      # list of dicts
+def find_by_name(n):
+    return next((m for m in st.session_state.members
+                 if m["name"].strip().lower() == n.strip().lower()), None)
 
-def get_member_by_name(name):
-    for m in st.session_state.members:
-        if m["name"].lower().strip() == name.lower().strip():
-            return m
-    return None
+# ────────────────────────────────────────────────────────────────────────
+# Input form
+# ────────────────────────────────────────────────────────────────────────
+st.subheader("➕  Add a person")
+with st.form("add"):
+    name          = st.text_input("Name  (inside circle)")
+    spouse_name   = st.text_input("Spouse name (optional)")
+    parents_line  = st.text_input("Parent name(s) (comma-separated, optional)")
+    edge_label    = st.text_input("Text to write on arrow *from parents ➞ this child*"
+                                  "  (e.g. Daughter, Son)", value="")
+    submitted = st.form_submit_button("Add / link")
 
-st.subheader("➕ Add Member")
-with st.form("member_form"):
-    name = st.text_input("Name (only name inside circle)")
-    spouse = st.text_input("Spouse Name (optional)")
-    parents = st.text_input("Parent Names (comma-separated if both)")
-    relation_to_parents = st.text_input("Relation label to show on arrow (e.g., Son, Daughter, Husband)")
-    submit = st.form_submit_button("Add Member")
+if submitted and name:
+    pid = str(uuid.uuid4())                       # this person’s id
+    sid = None                                    # spouse id, maybe
 
-if submit and name:
-    member_id = str(uuid.uuid4())
-    spouse_id = None
-
-    if spouse:
-        existing = get_member_by_name(spouse)
-        if existing:
-            spouse_id = existing["id"]
+    # ── create / link spouse first ──────────────────────────────────────
+    if spouse_name:
+        exist = find_by_name(spouse_name)
+        if exist:
+            sid = exist["id"]
         else:
-            spouse_id = str(uuid.uuid4())
-            st.session_state.members.append({
-                "id": spouse_id,
-                "name": spouse,
-                "spouse_id": member_id,
-                "parent_ids": [],
-                "relation_label_to_parents": ""
-            })
+            sid = str(uuid.uuid4())
+            st.session_state.members.append(
+                dict(id=sid, name=spouse_name, spouse_id=pid,
+                     parent_ids=[], arrow_label="") )
 
+    # ── translate parent names ➞ ids ────────────────────────────────────
     parent_ids = []
-    if parents:
-        for pname in [p.strip() for p in parents.split(",")]:
-            p = get_member_by_name(pname)
-            if p:
-                parent_ids.append(p["id"])
+    if parents_line:
+        for p in map(str.strip, parents_line.split(",")):
+            match = find_by_name(p)
+            if match:
+                parent_ids.append(match["id"])
 
-    st.session_state.members.append({
-        "id": member_id,
-        "name": name,
-        "spouse_id": spouse_id,
-        "parent_ids": parent_ids,
-        "relation_label_to_parents": relation_to_parents
-    })
-    st.success(f"{name} added successfully.")
+    # ── finally add the main person ─────────────────────────────────────
+    st.session_state.members.append(
+        dict(id=pid, name=name, spouse_id=sid,
+             parent_ids=parent_ids, arrow_label=edge_label) )
+    st.success(f"Added {name}")
 
-# Draw Graphviz
-st.subheader("🧬 Visual Tree (Only names in circles, relation on arrows)")
-dot = Digraph("FamilyTree")
-dot.attr(rankdir="TB", nodesep="0.5", ranksep="1")
+# ────────────────────────────────────────────────────────────────────────
+# Build Graphviz diagram
+# ────────────────────────────────────────────────────────────────────────
+dot = Digraph("family", format="png")
+dot.attr(rankdir="TB", nodesep="0.50", ranksep="1.0",
+         node=dict(shape="circle", style="filled", color="white",
+                   fontname="Helvetica", fontsize="10"),
+         edge=dict(arrowsize="0.7"))
 
-# Add nodes
-added = set()
-for member in st.session_state.members:
-    if member["id"] not in added:
-        dot.node(member["id"], label=member["name"], shape="circle", style="filled", color="lightgrey")
-        added.add(member["id"])
+# 1️⃣  add every person as a node
+for m in st.session_state.members:
+    dot.node(m["id"], m["name"])
 
-# Couples
-for member in st.session_state.members:
-    if member["spouse_id"]:
-        marriage_node = f"{member['id']}_{member['spouse_id']}_marriage"
-        dot.node(marriage_node, shape="point", width="0.01", label="", style="invis")
-        dot.edge(member["id"], marriage_node, arrowhead="none", weight="10")
-        dot.edge(member["spouse_id"], marriage_node, arrowhead="none", weight="10")
+# 2️⃣  draw spouse connectors + capture marriage node ids
+marriage_nodes = {}
+for m in st.session_state.members:
+    if m["spouse_id"]:
+        a, b = m["id"], m["spouse_id"]
+        # always create one marriage node per *unordered* pair
+        key = "-".join(sorted([a, b]))
+        if key not in marriage_nodes:
+            mid = f"mar_{key}"
+            marriage_nodes[key] = mid
+            dot.node(mid, label="", shape="point", width="0.01")
+            dot.edge(a, mid, arrowhead="none", weight="10")
+            dot.edge(b, mid, arrowhead="none", weight="10")
 
-        # Children
-        for child in st.session_state.members:
-            if set(child["parent_ids"]) == set([member["id"], member["spouse_id"]]):
-                label = child.get("relation_label_to_parents", "")
-                dot.edge(marriage_node, child["id"], label=label)
+# 3️⃣  connect children ↓ from the correct node
+for child in st.session_state.members:
+    if len(child["parent_ids"]) == 2:               # couple ➞ child
+        key = "-".join(sorted(child["parent_ids"]))
+        mid = marriage_nodes.get(key)
+        if mid:
+            dot.edge(mid, child["id"], label=child["arrow_label"])
+    elif len(child["parent_ids"]) == 1:             # single parent ➞ child
+        dot.edge(child["parent_ids"][0], child["id"],
+                 label=child["arrow_label"])
 
-# Single parent → child arrows
-for member in st.session_state.members:
-    if member["parent_ids"] and len(member["parent_ids"]) == 1:
-        label = member.get("relation_label_to_parents", "")
-        dot.edge(member["parent_ids"][0], member["id"], label=label)
-
+st.subheader("📊  Tree preview")
 st.graphviz_chart(dot, use_container_width=True)
+
+# optional data inspector
+with st.expander("📋 Raw member list"):
+    for m in st.session_state.members:
+        st.write(m)
