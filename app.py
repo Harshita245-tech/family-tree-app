@@ -3,106 +3,89 @@ from graphviz import Digraph
 import uuid
 
 st.set_page_config(page_title="Family Tree", layout="wide")
-st.title("👨‍👩‍👧‍👦 Custom Family Tree Builder")
+st.title("🔗 Clean Family Tree (with arrows labeled)")
 
-# Initialize family data
 if "members" not in st.session_state:
-    st.session_state.members = []  # Each item: {id, name, relation, spouse_id, parent_ids}
+    st.session_state.members = []  # {id, name, spouse_id, parent_ids, relation_label_to_parents}
 
 def get_member_by_name(name):
     for m in st.session_state.members:
-        if m["name"] == name:
+        if m["name"].lower().strip() == name.lower().strip():
             return m
     return None
 
-# Form to add family member
-st.subheader("➕ Add a Family Member")
-
-with st.form("add_member_form"):
-    name = st.text_input("Name")
-    relation = st.text_input("Relation (e.g. Daughter, Son, Great Grandmother)")
-    spouse_name = st.text_input("Spouse Name (optional)")
-    parent_names = st.text_input("Parent(s) Name(s) (comma separated, if known)")
+st.subheader("➕ Add Member")
+with st.form("member_form"):
+    name = st.text_input("Name (only name inside circle)")
+    spouse = st.text_input("Spouse Name (optional)")
+    parents = st.text_input("Parent Names (comma-separated if both)")
+    relation_to_parents = st.text_input("Relation label to show on arrow (e.g., Son, Daughter, Husband)")
     submit = st.form_submit_button("Add Member")
 
 if submit and name:
     member_id = str(uuid.uuid4())
     spouse_id = None
 
-    # Add spouse if provided
-    if spouse_name:
-        existing_spouse = get_member_by_name(spouse_name)
-        if existing_spouse:
-            spouse_id = existing_spouse["id"]
+    if spouse:
+        existing = get_member_by_name(spouse)
+        if existing:
+            spouse_id = existing["id"]
         else:
             spouse_id = str(uuid.uuid4())
             st.session_state.members.append({
                 "id": spouse_id,
-                "name": spouse_name,
-                "relation": "Spouse",
+                "name": spouse,
                 "spouse_id": member_id,
                 "parent_ids": [],
+                "relation_label_to_parents": ""
             })
 
-    # Link parents
     parent_ids = []
-    if parent_names:
-        for pname in [p.strip() for p in parent_names.split(",")]:
-            parent = get_member_by_name(pname)
-            if parent:
-                parent_ids.append(parent["id"])
+    if parents:
+        for pname in [p.strip() for p in parents.split(",")]:
+            p = get_member_by_name(pname)
+            if p:
+                parent_ids.append(p["id"])
 
-    # Add primary member
     st.session_state.members.append({
         "id": member_id,
         "name": name,
-        "relation": relation,
         "spouse_id": spouse_id,
         "parent_ids": parent_ids,
+        "relation_label_to_parents": relation_to_parents
     })
-    st.success(f"✅ Added {name} with relation '{relation}'")
+    st.success(f"{name} added successfully.")
 
-# Draw the family tree
-st.subheader("🌳 Family Tree Visualization")
+# Draw Graphviz
+st.subheader("🧬 Visual Tree (Only names in circles, relation on arrows)")
+dot = Digraph("FamilyTree")
+dot.attr(rankdir="TB", nodesep="0.5", ranksep="1")
 
-dot = Digraph(comment="Family Tree", format="png")
-dot.attr(rankdir="TB", size="10")
-
+# Add nodes
 added = set()
-
 for member in st.session_state.members:
     if member["id"] not in added:
-        label = f'{member["name"]}\n({member["relation"]})'
-        dot.node(member["id"], label)
+        dot.node(member["id"], label=member["name"], shape="circle", style="filled", color="lightgrey")
         added.add(member["id"])
 
-    # Add spouse node and couple connector
-    if member.get("spouse_id"):
-        spouse = next((m for m in st.session_state.members if m["id"] == member["spouse_id"]), None)
-        if spouse and spouse["id"] not in added:
-            label = f'{spouse["name"]}\n({spouse["relation"]})'
-            dot.node(spouse["id"], label)
-            added.add(spouse["id"])
-        # Add invisible node to connect them on same level
-        couple_node = f"{member['id']}_{spouse['id']}_marriage"
-        dot.node(couple_node, shape="point", width="0.01", label="")
-        dot.edge(member["id"], couple_node, arrowhead="none", weight="10")
-        dot.edge(spouse["id"], couple_node, arrowhead="none", weight="10")
+# Couples
+for member in st.session_state.members:
+    if member["spouse_id"]:
+        marriage_node = f"{member['id']}_{member['spouse_id']}_marriage"
+        dot.node(marriage_node, shape="point", width="0.01", label="", style="invis")
+        dot.edge(member["id"], marriage_node, arrowhead="none", weight="10")
+        dot.edge(member["spouse_id"], marriage_node, arrowhead="none", weight="10")
 
-        # Connect children to marriage node
+        # Children
         for child in st.session_state.members:
-            if set(child["parent_ids"]) == set([member["id"], spouse["id"]]):
-                dot.edge(couple_node, child["id"])
+            if set(child["parent_ids"]) == set([member["id"], member["spouse_id"]]):
+                label = child.get("relation_label_to_parents", "")
+                dot.edge(marriage_node, child["id"], label=label)
 
-    else:
-        # If single parent
-        for child in st.session_state.members:
-            if child["parent_ids"] == [member["id"]]:
-                dot.edge(member["id"], child["id"])
+# Single parent → child arrows
+for member in st.session_state.members:
+    if member["parent_ids"] and len(member["parent_ids"]) == 1:
+        label = member.get("relation_label_to_parents", "")
+        dot.edge(member["parent_ids"][0], member["id"], label=label)
 
 st.graphviz_chart(dot, use_container_width=True)
-
-# Show the data table
-with st.expander("📋 View Member Data"):
-    for m in st.session_state.members:
-        st.write(f"🧍 {m['name']} – {m['relation']}")
