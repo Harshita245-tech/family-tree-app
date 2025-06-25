@@ -50,21 +50,24 @@ if add_child:
     else:
         st.error("Please enter both parents and at least one child.")
 
-# --- Step 3: Add Spouse ---
-st.header("💍 Step 3: Add Spouse of a Member")
-with st.form("spouse_form"):
-    person = st.selectbox("Select Person", df['name'].unique().tolist(), key="sp1")
-    spouse_name = st.text_input("Spouse Name")
-    spouse_submit = st.form_submit_button("Add Spouse")
+# --- Step 3: Add Children of Varalakshmi and Rajendra Prasad ---
+st.header("👧 Step 3: Add Children of a Specific Couple")
+with st.form("child_specific_form"):
+    couple_parent1 = st.selectbox("Parent 1 (e.g., Varalakshmi)", df['name'].unique().tolist(), key="cp1")
+    couple_parent2 = st.selectbox("Parent 2 (e.g., Rajendra Prasad)", df['name'].unique().tolist(), key="cp2")
+    couple_children = st.text_area("Enter Their Children (one per line)")
+    couple_submit = st.form_submit_button("Add Children")
 
-if spouse_submit:
-    if person and spouse_name:
-        df = df._append({"name": spouse_name.strip(), "relation_type": "Spouse", "related_to": person, "label": "Couple"}, ignore_index=True)
+if couple_submit:
+    if couple_parent1 and couple_parent2 and couple_children:
+        for name in couple_children.strip().split("\n"):
+            df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": couple_parent1, "label": "child"}, ignore_index=True)
+            df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": couple_parent2, "label": "child"}, ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
-        st.success("Spouse added.")
+        st.success("Children added.")
         st.rerun()
     else:
-        st.error("Enter both names.")
+        st.error("Please enter both parents and children.")
 
 # --- Step 4: Add Next Gen Descendants for Children (Manual Infinite Flow) ---
 st.header("🔁 Step 4: Add Child with Spouse and Their Children")
@@ -76,9 +79,7 @@ with st.form("multi_gen_form"):
 
 if multi_submit:
     if child and child_spouse:
-        # Add spouse
         df = df._append({"name": child_spouse.strip(), "relation_type": "Spouse", "related_to": child, "label": "Couple"}, ignore_index=True)
-        # Add children
         if child_children.strip():
             for name in child_children.strip().split("\n"):
                 df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": child, "label": "child"}, ignore_index=True)
