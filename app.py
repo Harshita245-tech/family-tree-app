@@ -4,121 +4,79 @@ from graphviz import Digraph
 import os
 
 st.set_page_config(layout="wide")
-st.title("🌳 Guided Family Tree Builder (With Couple Relationship)")
+st.title("🌳 Custom Family Tree Builder (Couple-Oriented)")
 
 DATA_FILE = "data.csv"
 
-# Load or initialize data
+# Load or create
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
 else:
     df = pd.DataFrame(columns=["name", "relation_type", "related_to", "label"])
 
-# --- Step 1: Root Couple Entry ---
-st.header("🧓 Step 1: Add Root Ancestors (Couple)")
+# --- Step 1: Add Couple ---
+st.header("👩‍❤️‍👨 Step 1: Add Couple")
+with st.form("couple_form"):
+    person1 = st.text_input("First Person Name")
+    person2 = st.text_input("Second Person Name")
+    add_couple = st.form_submit_button("Add Couple")
 
-with st.form("root_form"):
-    root1 = st.text_input("Root Person 1 (e.g., Rajaram)")
-    root2 = st.text_input("Root Person 2 (e.g., Radha)")
-    root_relation = st.text_input("Relation between them (type 'Couple')", value="Couple")
-    submitted = st.form_submit_button("Add Root Couple")
-
-if submitted:
-    if root1.strip() and root2.strip():
-        df = df._append({"name": root1.strip(), "relation_type": "Root", "related_to": "", "label": ""}, ignore_index=True)
-        df = df._append({"name": root2.strip(), "relation_type": "Spouse", "related_to": root1.strip(), "label": root_relation.strip()}, ignore_index=True)
+if add_couple:
+    if person1 and person2:
+        df = df._append({"name": person1, "relation_type": "Root", "related_to": "", "label": ""}, ignore_index=True)
+        df = df._append({"name": person2, "relation_type": "Spouse", "related_to": person1, "label": "Couple"}, ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
-        st.success("Root couple added.")
+        st.success("Couple added.")
         st.rerun()
     else:
         st.error("Please enter both names.")
 
 # --- Step 2: Add Children ---
-st.header("👶 Step 2: Add Children of Any Member")
-
+st.header("🧒 Step 2: Add Child from a Couple")
 with st.form("child_form"):
-    parent = st.selectbox("Select Parent", df['name'].unique().tolist())
-    children_names = st.text_area("Enter Children (one per line)")
-    child_gender = st.text_input("Gender label (e.g., Son / Daughter)")
-    child_submit = st.form_submit_button("Add Children")
+    parent1 = st.selectbox("Select First Parent", df['name'].unique().tolist())
+    parent2 = st.selectbox("Select Second Parent", df['name'].unique().tolist())
+    child_name = st.text_input("Child's Name")
+    add_child = st.form_submit_button("Add Child")
 
-if child_submit:
-    if children_names.strip():
-        for name in children_names.strip().split("\n"):
-            df = df._append({
-                "name": name.strip(),
-                "relation_type": "Child",
-                "related_to": parent,
-                "label": child_gender
-            }, ignore_index=True)
+if add_child:
+    if parent1 and parent2 and child_name:
+        df = df._append({"name": child_name.strip(), "relation_type": "Child", "related_to": parent1, "label": "child"}, ignore_index=True)
+        df = df._append({"name": child_name.strip(), "relation_type": "Child", "related_to": parent2, "label": "child"}, ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
-        st.success("Children added.")
+        st.success("Child added from couple.")
         st.rerun()
     else:
-        st.error("Please enter at least one child name.")
+        st.error("Please enter both parents and the child's name.")
 
-# --- Step 3: Add Spouse (Label: Couple) ---
-st.header("💍 Step 3: Add Spouse (as Couple)")
-
+# --- Step 3: Add Spouse of Child ---
+st.header("💍 Step 3: Add Spouse of a Member")
 with st.form("spouse_form"):
     person = st.selectbox("Select Person", df['name'].unique().tolist())
     spouse_name = st.text_input("Spouse Name")
-    spouse_relation = st.text_input("Relation (default = Couple)", value="Couple")
     spouse_submit = st.form_submit_button("Add Spouse")
 
 if spouse_submit:
-    if person.strip() and spouse_name.strip():
-        df = df._append({
-            "name": spouse_name.strip(),
-            "relation_type": "Spouse",
-            "related_to": person,
-            "label": spouse_relation.strip()
-        }, ignore_index=True)
+    if person and spouse_name:
+        df = df._append({"name": spouse_name.strip(), "relation_type": "Spouse", "related_to": person, "label": "Couple"}, ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
         st.success("Spouse added.")
         st.rerun()
     else:
-        st.error("Please enter both names.")
+        st.error("Enter both names.")
 
-# --- Step 4: Add Next Generation (Grandchildren, etc.) ---
-st.header("👧 Step 4: Add Children of the Next Generation")
-
-with st.form("next_gen_form"):
-    next_parent = st.selectbox("Select Parent (Any Member)", df['name'].unique().tolist())
-    next_children = st.text_area("Enter Children (one per line)")
-    gen_order = st.text_input("Label (e.g., Eldest / Middle / Youngest)")
-    gen_submit = st.form_submit_button("Add Next Gen Children")
-
-if gen_submit:
-    if next_children.strip():
-        for name in next_children.strip().split("\n"):
-            df = df._append({
-                "name": name.strip(),
-                "relation_type": "Child",
-                "related_to": next_parent,
-                "label": gen_order.strip()
-            }, ignore_index=True)
-        df.to_csv(DATA_FILE, index=False)
-        st.success("Next generation added.")
-        st.rerun()
-    else:
-        st.error("Please enter names.")
-
-# --- Family Tree Visual ---
-st.subheader("📍 Family Tree Visualization")
-
+# --- Render Family Tree ---
+st.subheader("📍 Visual Family Tree")
 dot = Digraph()
 dot.attr(rankdir="TB")
 
 for _, row in df.iterrows():
     name = row["name"]
-    rel_type = row["relation_type"]
     related_to = row["related_to"]
+    rel_type = row["relation_type"]
     label = row["label"]
 
-    display_label = f"{name}\n[{label}]" if label else name
-    dot.node(name, label=display_label)
-
+    dot.node(name)
     if rel_type == "Spouse" and related_to:
         dot.edge(related_to, name, dir="none", label="couple", constraint="false")
     elif rel_type == "Child" and related_to:
@@ -126,14 +84,13 @@ for _, row in df.iterrows():
 
 st.graphviz_chart(dot)
 
-# --- View Data ---
-with st.expander("📋 Family Table"):
+# --- View / Reset ---
+with st.expander("📋 View Table"):
     st.dataframe(df)
 
-# --- Reset All Data ---
-with st.expander("⚠️ Reset Family Tree"):
-    if st.button("Reset All Data"):
+with st.expander("⚠️ Reset Tree"):
+    if st.button("Clear All Data"):
         df = pd.DataFrame(columns=["name", "relation_type", "related_to", "label"])
         df.to_csv(DATA_FILE, index=False)
-        st.warning("Family tree reset.")
+        st.warning("All data cleared.")
         st.rerun()
