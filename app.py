@@ -4,7 +4,7 @@ from graphviz import Digraph
 import os
 
 st.set_page_config(layout="wide")
-st.title("🌳 Guided Family Tree Builder (Couple-Oriented & Child Continuation)")
+st.title("🌳 Infinite Generation Family Tree Builder")
 
 DATA_FILE = "data.csv"
 
@@ -66,13 +66,13 @@ if spouse_submit:
     else:
         st.error("Enter both names.")
 
-# --- Step 4: Add Next Gen Children ---
+# --- Step 4: Add Next Gen Children (Repeatable for Infinite Generations) ---
 st.header("👶 Step 4: Add Next Generation Children")
 with st.form("next_gen_form"):
     parent1 = st.selectbox("Parent 1", df['name'].unique().tolist(), key="np1")
     parent2 = st.selectbox("Parent 2", df['name'].unique().tolist(), key="np2")
     next_gen_names = st.text_area("Enter Children (one per line)")
-    next_gen_submit = st.form_submit_button("Add Next Generation")
+    next_gen_submit = st.form_submit_button("Add Children")
 
 if next_gen_submit:
     if parent1 and parent2 and next_gen_names:
@@ -80,7 +80,7 @@ if next_gen_submit:
             df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": parent1, "label": "child"}, ignore_index=True)
             df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": parent2, "label": "child"}, ignore_index=True)
         df.to_csv(DATA_FILE, index=False)
-        st.success("Next generation added.")
+        st.success("Children added.")
         st.rerun()
     else:
         st.error("Please enter all required fields.")
