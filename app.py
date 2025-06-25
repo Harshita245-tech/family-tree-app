@@ -1,103 +1,73 @@
 import streamlit as st
-import uuid
-import json
+import pandas as pd
+from graphviz import Digraph
+import os
 
-st.set_page_config(page_title="Proper Family Tree", layout="wide")
-st.title("👨‍👩‍👧 Proper Top-Down Family Tree Builder")
+st.set_page_config(layout="wide")
+st.title("👨‍👩‍👧 Family Tree - Custom Diagram Style (as per sketch)")
 
-# Initialize tree data
-if "family" not in st.session_state:
-    st.session_state.family = {}  # {id: {"name", "spouse", "children": [ids]}}
+DATA_FILE = "data.csv"
 
-# Utility: get all member names
-def get_member_options():
-    return ["(Root)"] + [data["name"] for data in st.session_state.family.values()]
+# Load or initialize
+if os.path.exists(DATA_FILE):
+    df = pd.read_csv(DATA_FILE)
+else:
+    df = pd.DataFrame(columns=["name", "relation_type", "related_to", "label"])
 
-# Add new member
-st.subheader("➕ Add a Family Member")
-with st.form("add_member"):
-    name = st.text_input("Name")
-    spouse = st.text_input("Spouse (optional)")
-    parent = st.selectbox("This person is a child of...", get_member_options())
+# Form to add family member
+st.header("➕ Add Family Member (Same Structure as Your Diagram)")
+
+with st.form("add_form"):
+    name = st.text_input("Name (e.g., Rajendra Prasad)")
+    relation_type = st.selectbox("Relation Type", ["Root", "Spouse", "Child"])
+    related_to = st.text_input("Related To (Existing Person’s Name)")
+    label = st.text_input("Label (e.g., Daughter, Husband, CW, etc.)")
     submitted = st.form_submit_button("Add to Tree")
 
-if submitted and name:
-    person_id = str(uuid.uuid4())
-    st.session_state.family[person_id] = {
-        "name": name,
-        "spouse": spouse.strip(),
-        "children": []
-    }
+if submitted:
+    if not name.strip():
+        st.error("Name is required.")
+    else:
+        df = df._append({
+            "name": name.strip(),
+            "relation_type": relation_type,
+            "related_to": related_to.strip(),
+            "label": label.strip()
+        }, ignore_index=True)
+        df.to_csv(DATA_FILE, index=False)
+        st.success(f"{name.strip()} added!")
+        st.experimental_rerun()
 
-    # Add to parent's children list
-    if parent != "(Root)":
-        for pid, pdata in st.session_state.family.items():
-            if pdata["name"] == parent:
-                pdata["children"].append(person_id)
-                break
-    st.success(f"{name} added!")
+# Display tree
+st.subheader("📍 Generated Tree (Like Sketch)")
+dot = Digraph(format="png")
+dot.attr(rankdir='TB')  # Top to bottom
 
-# Build nested HTML recursively
-def render_member(member_id):
-    member = st.session_state.family[member_id]
-    spouse_html = f'<div class="member spouse">{member["spouse"]}</div>' if member["spouse"] else ""
-    person_block = f'''
-        <div class="family-pair">
-            <div class="member">{member["name"]}</div>
-            {spouse_html}
-        </div>
-    '''
+for _, row in df.iterrows():
+    name = row["name"]
+    related = row["related_to"]
+    rel_type = row["relation_type"]
+    label = row["label"]
 
-    children_html = ""
-    if member["children"]:
-        children_blocks = "".join([render_member(cid) for cid in member["children"]])
-        children_html = f'<div class="children">{children_blocks}</div>'
+    dot.node(name, label=name + ("\n[" + label + "]" if label else ""))
 
-    return f'<div class="generation">{person_block}{children_html}</div>'
+    if rel_type == "Spouse" and related:
+        dot.edge(related, name, dir="none", label="spouse", constraint='false')
+    elif rel_type == "Child" and related:
+        dot.edge(related, name, label="child")
+    elif rel_type == "Root":
+        dot.node(name)
 
-# Find roots (those without parents)
-all_children = {cid for m in st.session_state.family.values() for cid in m["children"]}
-roots = [pid for pid in st.session_state.family if pid not in all_children]
+st.graphviz_chart(dot)
 
-# Inject CSS
-st.markdown("""
-    <style>
-    .generation {
-        text-align: center;
-        margin: 20px auto;
-    }
-    .family-pair {
-        display: inline-flex;
-        gap: 20px;
-        justify-content: center;
-        margin-bottom: 10px;
-    }
-    .member {
-        padding: 10px 15px;
-        background-color: #e0f7fa;
-        border-radius: 8px;
-        font-weight: bold;
-        border: 2px solid #00acc1;
-        min-width: 100px;
-    }
-    .spouse {
-        background-color: #ffe0b2;
-        border-color: #fb8c00;
-    }
-    .children {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 40px;
-        margin-top: 10px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Table viewer
+with st.expander("🧾 Family Data Table"):
+    st.dataframe(df, use_container_width=True)
 
-st.subheader("🌳 Family Tree Output")
-tree_html = "".join([render_member(rid) for rid in roots])
-st.markdown(tree_html, unsafe_allow_html=True)
-
-# Optional JSON viewer
-with st.expander("📋 Raw Family Data"):
-    st.json(st.session_state.family)
+# Reset option
+with st.expander("⚠️ Reset Tree"):
+    if st.button("Delete All Data"):
+        df = pd.DataFrame(columns=["name", "relation_type", "related_to", "label"])
+        df.to_csv(DATA_FILE, index=False)
+        st.warning("All family data cleared.")
+        st.experimental_rerun()
