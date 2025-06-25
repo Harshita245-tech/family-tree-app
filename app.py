@@ -67,7 +67,7 @@ if spouse_submit:
         st.error("Enter both names.")
 
 # --- Step 4: Add Next Gen Children (Repeatable for Infinite Generations) ---
-st.header("👶 Step 4: Add Next Generation Children")
+st.header("👶 Step 4: Add Next Generation Children (Repeatable)")
 with st.form("next_gen_form"):
     parent1 = st.selectbox("Parent 1", df['name'].unique().tolist(), key="np1")
     parent2 = st.selectbox("Parent 2", df['name'].unique().tolist(), key="np2")
@@ -84,6 +84,25 @@ if next_gen_submit:
         st.rerun()
     else:
         st.error("Please enter all required fields.")
+
+# --- Step 5: Continue Descendants (Repeatable for Infinite Generations) ---
+st.header("🔁 Step 5: Add Spouse and Children of Any Existing Member")
+with st.form("descendants_form"):
+    parent = st.selectbox("Select Parent (who has a spouse already added)", df['name'].unique().tolist(), key="dp1")
+    spouse = st.selectbox("Select Spouse of Parent", df['name'].unique().tolist(), key="dp2")
+    children = st.text_area("Enter Their Children (one per line)")
+    desc_submit = st.form_submit_button("Add Descendants")
+
+if desc_submit:
+    if parent and spouse and children:
+        for name in children.strip().split("\n"):
+            df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": parent, "label": "child"}, ignore_index=True)
+            df = df._append({"name": name.strip(), "relation_type": "Child", "related_to": spouse, "label": "child"}, ignore_index=True)
+        df.to_csv(DATA_FILE, index=False)
+        st.success("Descendant children added.")
+        st.rerun()
+    else:
+        st.error("Please select both parents and at least one child.")
 
 # --- Render Family Tree ---
 st.subheader("📍 Visual Family Tree")
