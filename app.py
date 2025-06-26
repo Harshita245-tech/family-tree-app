@@ -8,7 +8,7 @@ st.title("🌳 Infinite Generation Family Tree Builder")
 
 DATA_FILE = "data.csv"
 
-# Load or create
+# Load or create DataFrame
 df = pd.read_csv(DATA_FILE) if os.path.exists(DATA_FILE) else pd.DataFrame(columns=["name", "relation_type", "related_to", "label"])
 
 # Sidebar Mode Selector
@@ -41,8 +41,8 @@ if add_couple and person1 and person2:
 # Step 2: Add Children
 st.header("👶 Step 2: Add Children of a Couple")
 with st.form("children_form"):
-    p1 = st.selectbox("Parent 1 (e.g., Varalakshmi)", df['name'].unique().tolist(), key="p1")
-    p2 = st.selectbox("Parent 2 (e.g., Rajendra Prasad)", df['name'].unique().tolist(), key="p2")
+    p1 = st.selectbox("Parent 1", df['name'].unique().tolist(), key="p1")
+    p2 = st.selectbox("Parent 2", df['name'].unique().tolist(), key="p2")
     children = st.text_area("Enter Their Children (one per line)")
     submit_children = st.form_submit_button("Add Children")
 if submit_children and children:
@@ -133,55 +133,64 @@ if go and parent and spouse and children:
     st.rerun()
 
 # Step 8: Delete a Member
-st.header("❌ Step 8: Delete a Member")
-with st.form("delete_form"):
-    to_delete = st.selectbox("Select Member to Delete", df['name'].unique().tolist())
-    del_submit = st.form_submit_button("Delete Member")
-if del_submit and to_delete:
+st.header("🗑️ Step 8: Delete a Member")
+with st.form("delete_member"):
+    to_delete = st.selectbox("Select Member to Delete", df['name'].unique().tolist(), key="del1")
+    delete_btn = st.form_submit_button("Delete")
+if delete_btn:
     df = df[df['name'] != to_delete]
     df = df[df['related_to'] != to_delete]
     df.to_csv(DATA_FILE, index=False)
-    st.warning(f"Member '{to_delete}' and related links deleted.")
+    st.success(f"Deleted {to_delete} and related links.")
     st.rerun()
 
-# Step 9: Update Member Name
-st.header("✏️ Step 9: Update Member Name")
-with st.form("update_form"):
-    old_name = st.selectbox("Select Member to Rename", df['name'].unique().tolist())
-    new_name = st.text_input("Enter New Name")
-    update_submit = st.form_submit_button("Update Name")
-if update_submit and old_name and new_name:
+# Step 9: Rename a Member
+st.header("✏️ Step 9: Rename a Member")
+with st.form("rename_member"):
+    old_name = st.selectbox("Select Member to Rename", df['name'].unique().tolist(), key="up1")
+    new_name = st.text_input("Enter New Name", key="up2")
+    update_btn = st.form_submit_button("Update Name")
+if update_btn and new_name:
     df['name'] = df['name'].replace(old_name, new_name)
     df['related_to'] = df['related_to'].replace(old_name, new_name)
     df.to_csv(DATA_FILE, index=False)
-    st.success(f"Updated name from '{old_name}' to '{new_name}'")
+    st.success(f"Renamed {old_name} to {new_name}.")
     st.rerun()
 
-# Tree Rendering
+# Render Tree
 st.subheader("📍 Visual Family Tree")
 dot = Digraph()
 dot.attr(rankdir="TB")
-couples = set()
+couple_nodes = {}
+added_edges = set()
+
+for name in df['name'].unique():
+    dot.node(name)
 
 for _, row in df.iterrows():
-    name, related_to, rel_type, label = row["name"], row["related_to"], row["relation_type"], row["label"]
-    dot.node(name)
-    if rel_type == "Spouse" and related_to:
-        couple_id = f"{min(name, related_to)}_{max(name, related_to)}"
-        if couple_id not in couples:
-            dot.node(couple_id, shape="point", width="0")
-            dot.edge(related_to, couple_id, dir="none", label="couple")
-            dot.edge(name, couple_id, dir="none")
-            couples.add(couple_id)
-    elif rel_type == "Child" and related_to:
-        for _, partner_row in df[(df['name'] == related_to) & (df['relation_type'] == 'Spouse')].iterrows():
-            partner = partner_row['related_to']
-            couple_id = f"{min(related_to, partner)}_{max(related_to, partner)}"
-            if couple_id in couples:
-                dot.edge(couple_id, name, label="child")
+    name = row['name']
+    related_to = row['related_to']
+    relation_type = row['relation_type']
+    if relation_type == 'Spouse' and related_to:
+        couple_id = tuple(sorted([name, related_to]))
+        if couple_id not in couple_nodes:
+            node_id = f"{couple_id[0]}_{couple_id[1]}_node"
+            couple_nodes[couple_id] = node_id
+            dot.node(node_id, shape="point", width="0", label="")
+            dot.edge(couple_id[0], node_id, dir="none", label="couple")
+            dot.edge(couple_id[1], node_id, dir="none")
+
+for _, row in df.iterrows():
+    name = row['name']
+    related_to = row['related_to']
+    relation_type = row['relation_type']
+    if relation_type == 'Child' and related_to:
+        for couple, couple_node in couple_nodes.items():
+            if related_to in couple:
+                if (couple_node, name) not in added_edges:
+                    dot.edge(couple_node, name, label="child")
+                    added_edges.add((couple_node, name))
                 break
-        else:
-            dot.edge(related_to, name, label="child")
 
 st.graphviz_chart(dot)
 
