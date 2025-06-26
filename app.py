@@ -101,40 +101,36 @@ if add_recursive and base and base_spouse and grandkids:
     st.rerun()
 
 # Step 6: Add Next Generation
-def add_next_gen():
-    st.header("📥 Step 6: Add Next Generation")
-    with st.form("nextgen_form"):
-        parent = st.selectbox("Select Parent", df['name'].unique().tolist(), key="ng1")
-        parent_spouse = st.text_input("Enter Spouse Name", key="ng2")
-        kids = st.text_area("Enter Children Names (one per line)")
-        submit = st.form_submit_button("Add Next Gen")
-    if submit and parent and parent_spouse and kids:
-        df = df._append({"name": parent_spouse, "relation_type": "Spouse", "related_to": parent, "label": "Couple"}, ignore_index=True)
-        for kid in kids.strip().split("\n"):
-            df = df._append({"name": kid, "relation_type": "Child", "related_to": parent, "label": "child"}, ignore_index=True)
-            df = df._append({"name": kid, "relation_type": "Child", "related_to": parent_spouse, "label": "child"}, ignore_index=True)
-        df.to_csv(DATA_FILE, index=False)
-        st.success("Next generation added.")
-        st.rerun()
-add_next_gen()
+st.header("📥 Step 6: Add Next Generation")
+with st.form("nextgen_form"):
+    parent = st.selectbox("Select Parent", df['name'].unique().tolist(), key="ng1")
+    parent_spouse = st.text_input("Enter Spouse Name", key="ng2")
+    kids = st.text_area("Enter Children Names (one per line)")
+    submit = st.form_submit_button("Add Next Gen")
+if submit and parent and parent_spouse and kids:
+    df = df._append({"name": parent_spouse, "relation_type": "Spouse", "related_to": parent, "label": "Couple"}, ignore_index=True)
+    for kid in kids.strip().split("\n"):
+        df = df._append({"name": kid, "relation_type": "Child", "related_to": parent, "label": "child"}, ignore_index=True)
+        df = df._append({"name": kid, "relation_type": "Child", "related_to": parent_spouse, "label": "child"}, ignore_index=True)
+    df.to_csv(DATA_FILE, index=False)
+    st.success("Next generation added.")
+    st.rerun()
 
 # Step 7: Infinite Repeat
-def add_more_gens():
-    st.header("🔄 Step 7: Continue Adding Generations")
-    with st.form("genloop_form"):
-        parent = st.selectbox("Pick a Parent to Extend", df['name'].unique().tolist(), key="g7")
-        spouse = st.text_input("Spouse Name")
-        children = st.text_area("Children (one per line)")
-        go = st.form_submit_button("Add More")
-    if go and parent and spouse and children:
-        df = df._append({"name": spouse, "relation_type": "Spouse", "related_to": parent, "label": "Couple"}, ignore_index=True)
-        for ch in children.strip().split("\n"):
-            df = df._append({"name": ch, "relation_type": "Child", "related_to": parent, "label": "child"}, ignore_index=True)
-            df = df._append({"name": ch, "relation_type": "Child", "related_to": spouse, "label": "child"}, ignore_index=True)
-        df.to_csv(DATA_FILE, index=False)
-        st.success("New members added.")
-        st.rerun()
-add_more_gens()
+st.header("🔄 Step 7: Continue Adding Generations")
+with st.form("genloop_form"):
+    parent = st.selectbox("Pick a Parent to Extend", df['name'].unique().tolist(), key="g7")
+    spouse = st.text_input("Spouse Name")
+    children = st.text_area("Children (one per line)")
+    go = st.form_submit_button("Add More")
+if go and parent and spouse and children:
+    df = df._append({"name": spouse, "relation_type": "Spouse", "related_to": parent, "label": "Couple"}, ignore_index=True)
+    for ch in children.strip().split("\n"):
+        df = df._append({"name": ch, "relation_type": "Child", "related_to": parent, "label": "child"}, ignore_index=True)
+        df = df._append({"name": ch, "relation_type": "Child", "related_to": spouse, "label": "child"}, ignore_index=True)
+    df.to_csv(DATA_FILE, index=False)
+    st.success("New members added.")
+    st.rerun()
 
 # Step 8: Delete a Member
 st.header("❌ Step 8: Delete a Member")
